@@ -1,6 +1,7 @@
 import requests
 
 from dacite import from_dict
+from typing import List
 from .data import (
     Account,
     Block,
@@ -110,9 +111,7 @@ class Client(object):
             config=DACITE_CONFIG,
         )
 
-    def get_latest_request(
-        self, oid: int, calldata: bytes, min_count: int, ask_count: int
-    ) -> RequestInfo:
+    def get_latest_request(self, oid: int, calldata: bytes, min_count: int, ask_count: int) -> RequestInfo:
         return from_dict(
             data_class=RequestInfo,
             data=self._get_result(
@@ -129,3 +128,19 @@ class Client(object):
 
     def get_reporters(self, validator: str) -> list:
         return self._get_result("/oracle/reporters/{}".format(validator))
+
+    def get_request_id_by_tx_hash(self, tx_hash: HexBytes) -> List[int]:
+        msgs = self._get("/txs/{}".format(tx_hash.hex()))["logs"]
+        request_ids = []
+        for msg in msgs:
+            request_event = [event for event in msg["events"] if event["type"] == "request"]
+            if len(request_event) == 0:
+                pass
+            else:
+                attrs = request_event[0]["attributes"]
+                filtered_attr = [attr for attr in attrs if attr["key"] == "id"]
+                request_id = filtered_attr[0]["value"]
+                request_ids.append(int(request_id))
+        if len(request_ids) == 0:
+            raise ValueError("There is no request message in this tx")
+        return request_ids
